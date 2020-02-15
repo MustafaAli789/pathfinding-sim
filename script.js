@@ -6,6 +6,7 @@ const colWidth = rowHeight = 20
 const cols = 1000 / colWidth;
 const rows = 500 / rowHeight
 let mouseClicked = false;
+let path = []
 
 let runningDFS = false;
 let dfsStack = [];
@@ -44,6 +45,8 @@ generateArrayGrid = () => {
 }
 
 let map = generateArrayGrid();
+let mapCopy = generateArrayGrid();
+
 let startCoord={row: 0, col: 0};
 let startSelected = false;
 let endCord={row:10, col:10};
@@ -51,6 +54,9 @@ let endSelected=false;
 
 map[startCoord.row][startCoord.col] = NODETYPES.START_UNSELECTED;
 map[endCord.row][endCord.col] = NODETYPES.END_UNSELECTED;
+
+mapCopy=JSON.parse(JSON.stringify(map));
+
 
 drawGrid = () => {
     ctx.strokeStyle =  "rgba(0, 0, 255, 0.5)";
@@ -77,8 +83,28 @@ drawGrid = () => {
     }
 }
 
+drawPath = (path) =>{
+
+    if (path.length===0)
+        return
+
+    ctx.beginPath();
+    let start = getXandYFromRowAndCol(path[0])
+    ctx.moveTo(start.x, start.y)
+    path.forEach(pos=>{
+        let posCoords = getXandYFromRowAndCol(pos);
+        ctx.lineTo(posCoords.x, posCoords.y)
+    })
+    ctx.stroke();
+}
+
 getColAndRowFromXAndY = (x, y) => {
     return {col: Math.ceil(x/colWidth)-1, row: Math.ceil(y/rowHeight)-1}
+}
+
+//the addition of half the col width and row height are to get into the middle of the grid spot
+getXandYFromRowAndCol = ({row, col}) => {
+    return {x: col*colWidth+colWidth/2, y: row*rowHeight+rowHeight/2}
 }
 
 document.addEventListener('mousemove', (event)=>setPosClicked(event, "dragged"))
@@ -102,6 +128,7 @@ setPosClicked = (event, action) => {
         if (!startSelected){
             startSelected=true
             map[row][col]=NODETYPES.START_SELECTED
+            mapCopy[row][col]=NODETYPES.START_SELECTED
             return
         }
     }
@@ -110,8 +137,10 @@ setPosClicked = (event, action) => {
     if (startSelected && action==="clicked" && (col!=startCoord.col 
         || row!=startCoord.row) && (col!=endCord.col || row!=endCord.row)){
         map[row][col]=NODETYPES.START_UNSELECTED;
+        mapCopy[row][col]=NODETYPES.START_UNSELECTED;
         startSelected=false;
         map[startCoord.row][startCoord.col]=NODETYPES.UNVISITED;
+        mapCopy[startCoord.row][startCoord.col]=NODETYPES.UNVISITED;
         startCoord={row, col}
         return
     }
@@ -121,6 +150,7 @@ setPosClicked = (event, action) => {
         if (!endSelected){
             endSelected=true
             map[row][col]=NODETYPES.END_SELECTED;
+            mapCopy[row][col]=NODETYPES.END_SELECTED;
             return
         }
     }
@@ -129,8 +159,10 @@ setPosClicked = (event, action) => {
     if (endSelected && action==="clicked" && (col!=startCoord.col 
         || row!=startCoord.row) && (col!=endCord.col || row!=endCord.row)){
         map[row][col]=NODETYPES.END_UNSELECTED;
+        mapCopy[row][col]=NODETYPES.END_UNSELECTED;
         endSelected=false;
         map[endCord.row][endCord.col]=NODETYPES.UNVISITED;
+        mapCopy[endCord.row][endCord.col]=NODETYPES.UNVISITED;
         endCord={row, col}
         return
     }
@@ -138,31 +170,35 @@ setPosClicked = (event, action) => {
     //placing wall if start or end block were not clicked
     if(col>=0 && col<cols && row>=0 && row<rows && (col!=startCoord.col 
         || row!=startCoord.row) && (col!=endCord.col || row!=endCord.row)){
-        if (action==="dragged" && mouseClicked)
+        if (action==="dragged" && mouseClicked){
             map[row][col]=NODETYPES.WALL; 
-        else if (action==="clicked") 
+            mapCopy[row][col]=NODETYPES.WALL; 
+        }
+        else if (action==="clicked"){
             map[row][col]*=-1
-    }
-}
-
-resetMap = () => {
-    for (let i =0; i<rows; i++){
-        for (let j =0; j<cols; j++){
-            if (map[i][j]===NODETYPES.VISITED)
-                map[i][j]===NODETYPES.UNVISITED
-            else if (map[i][j]===NODETYPES.END_SELECTED)
-                map[i][j]=NODETYPES.END_UNSELECTED
-            else if (map[i][j]===NODETYPES.START_SELECTED)
-                map[i][j]=NODETYPES.START_UNSELECTED
-            
+            mapCopy[row][col]*=-1
         }
     }
 }
 
+resetMap = () => {
+
+    //clean upp
+    if (mapCopy[startCoord.row][startCoord.col]===NODETYPES.START_SELECTED){
+        mapCopy[startCoord.row][startCoord.col]=NODETYPES.START_UNSELECTED
+    }
+    if (mapCopy[endCord.row][endCord.col]===NODETYPES.START_SELECTED){
+        mapCopy[endCord.row][endCord.col]=NODETYPES.START_UNSELECTED
+    }
+
+    map=JSON.parse(JSON.stringify(mapCopy));
+}
+
 runDFS = () => {
+    resetMap();
     runningDFS = true;
     dfsStack = [];
-    resetMap(map)
+    path=[];
 
     dfsStack.push(startCoord)
     map[startCoord.row][startCoord.col]=NODETYPES.VISITED 
@@ -233,7 +269,7 @@ function main(){
             runningDFS = true
         else if(status==="FOUND"){
             runningDFS = false;
-            alert("FOUND")
+            path=dfsStack;
         }
         else if(status==="NOT FOUND"){
             runningDFS=false;
@@ -244,6 +280,7 @@ function main(){
 
     ctx.clearRect(0, 0, width, height);
     drawGrid()
+    drawPath(path)
 }
 
-setInterval(main, 1000/500)
+setInterval(main, 1000/1000)
