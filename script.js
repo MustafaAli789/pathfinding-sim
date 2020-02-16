@@ -224,6 +224,7 @@ resetMap = () => {
     }
 
     map=JSON.parse(JSON.stringify(mapCopy));
+    path=[]
 }
 
 runDFS = () => {
