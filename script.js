@@ -8,8 +8,13 @@ const rows = 500 / rowHeight
 let mouseClicked = false;
 let path = []
 
-let runningDFS = false;
+let searchType = {DFS: false, BFS: false, DJIKSTRA: false};
+let runningSearch = false
+
 let dfsStack = [];
+let bfsQueue = [];
+let bfsPath = [];
+let bfsPrevMap = new WeakMap();
 
 /*
 White - unvisted 
@@ -76,6 +81,7 @@ drawGrid = () => {
                 else if(map[i][j]===NODETYPES.VISITED)
                     ctx.fillStyle="rgba(206, 252, 241, 0.5)"
                 ctx.fillRect(j*colWidth, i*rowHeight, colWidth, rowHeight)
+                ctx.strokeRect(j*colWidth, i*rowHeight, colWidth, rowHeight)
             } else { //grid line
                 ctx.strokeRect(j*colWidth, i*rowHeight, colWidth, rowHeight)
             }
@@ -88,6 +94,7 @@ drawPath = (path) =>{
     if (path.length===0)
         return
 
+    ctx.strokeStyle="rgb(0,0,0)"
     ctx.beginPath();
     let start = getXandYFromRowAndCol(path[0])
     ctx.moveTo(start.x, start.y)
@@ -113,7 +120,7 @@ document.addEventListener("mousedown", (event)=>setPosClicked(event, "clicked"))
 
 setPosClicked = (event, action) => {
 
-    if (runningDFS)
+    if (runningSearch)
         return
 
     let rect = canvas.getBoundingClientRect();
@@ -181,6 +188,31 @@ setPosClicked = (event, action) => {
     }
 }
 
+setSearchType= (searchAlgo) => {
+    
+    //resetting ooptions
+    Object.keys(searchType).forEach(key=>{
+        searchType[key]=false;
+    })
+
+    if (searchAlgo==="DFS")
+        searchType.DFS = true;
+    else if (searchAlgo==="BFS")
+        searchType.BFS=true
+
+    document.querySelector("#algoDropdown button").textContent=searchAlgo;
+}
+
+runSearch= () => {
+    if (searchType.DFS){
+        runDFS();
+        runningSearch=true
+    } else if (searchType.BFS){
+        runBFS();
+        runningSearch=true
+    }
+}
+
 resetMap = () => {
 
     //clean upp
@@ -196,13 +228,25 @@ resetMap = () => {
 
 runDFS = () => {
     resetMap();
-    runningDFS = true;
+    searchType.DFS = true;
     dfsStack = [];
     path=[];
 
     dfsStack.push(startCoord)
     map[startCoord.row][startCoord.col]=NODETYPES.VISITED 
 
+}
+
+runBFS = () => {
+    resetMap();
+    searchType.BFS = true;
+    bfsQueue=[]
+    bfsPath=[]
+    path=[]
+    bfsPrevMap=new WeakMap();
+
+    bfsQueue.push(startCoord);
+    map[startCoord.row][startCoord.col]=NODETYPES.VISITED 
 }
 
 isSameSpot = (pos1, pos2) => {
@@ -260,22 +304,64 @@ depthFirstSearch = (stack, visitedMap) => {
 
 }
 
+breadthFirstSearch = (queue, visitedMap) =>{
+    if (queue.length===0)
+        return "NOT FOUND"
+
+    let curNode = queue[0]
+    if (isSameSpot(queue[queue.length-1], endCord)){
+        bfsPath.unshift(endCord)
+        let prevNode = bfsPrevMap.get(queue[queue.length-1])
+        bfsPath.unshift(prevNode)
+        while(!isSameSpot(prevNode, startCoord) || bfsPrevMap.get(prevNode)!==undefined){
+            prevNode = bfsPrevMap.get(prevNode)
+            bfsPath.unshift(prevNode)
+        }
+        return "FOUND"
+    }
+
+    let adjacentNode = getFreeAdjacentNode(visitedMap, curNode)
+    if (adjacentNode!=null){
+        queue.push(adjacentNode)
+        bfsPrevMap.set(adjacentNode, curNode); //value is the prev node visited
+        visitedMap[adjacentNode.row][adjacentNode.col]=NODETYPES.VISITED
+    } else {
+        queue.shift()
+    }
+
+    return "SEARCHING"
+
+}
+
 function main(){
 
-    if (runningDFS){
-
-        let status = depthFirstSearch(dfsStack, map)
-        if (status === "SEARCHING")
-            runningDFS = true
-        else if(status==="FOUND"){
-            runningDFS = false;
-            path=dfsStack;
+    if (runningSearch){
+        if (searchType.DFS){
+            let status = depthFirstSearch(dfsStack, map)
+            if (status === "SEARCHING")
+                runningSearch=true
+            else if(status==="FOUND"){
+                runningSearch=false
+                path=dfsStack;
+            }
+            else if(status==="NOT FOUND"){
+                runningSearch=false
+                alert("NOT FOUND")
+            }
+    
+        } else if (searchType.BFS){
+            let status = breadthFirstSearch(bfsQueue, map);
+            if (status === "SEARCHING")
+                runningSearch=true
+            else if(status==="FOUND"){
+                runningSearch=false
+                path=bfsPath;
+            }
+            else if(status==="NOT FOUND"){
+                runningSearch=false
+                alert("NOT FOUND")
+            }
         }
-        else if(status==="NOT FOUND"){
-            runningDFS=false;
-            alert("NOT FOUND")
-        }
-
     }
 
     ctx.clearRect(0, 0, width, height);
@@ -283,4 +369,4 @@ function main(){
     drawPath(path)
 }
 
-setInterval(main, 1000/1000)
+setInterval(main, 1000/500)

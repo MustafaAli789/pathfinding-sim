@@ -11,10 +11,20 @@
         <div class="container" style="height: 100%">
             <div class="row">
                 <div class="col">
-                    <button onclick="runDFS()">START</button>
+                    <div id="algoDropdown"  class="dropdown">
+                        <button style="width: 100%" class="btn btn-secondary dropdown-toggle" type="button" id="dropdownMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                          Search Algorithm
+                        </button>
+                        <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
+                          <a class="dropdown-item" href="#" onclick="setSearchType('DFS')">DFS</a>
+                          <a class="dropdown-item" href="#" onclick="setSearchType('BFS')">BFS</a>
+                        </div>
+                      </div>
                 </div>
                 <div class="col"></div>
-                <div class="col"></div>
+                <div class="col">
+                    <button onclick="runSearch()">START</button>
+                </div>
             </div>
             <div clas="row d-flex align-items-center justify-content-center">
                 <canvas id="canvas" height="500px" width="1000px" style =" border: 1px solid black"></canvas>
