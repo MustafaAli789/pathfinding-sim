@@ -42,7 +42,8 @@ let NODETYPES = {START_UNSELECTED: 'START_UNSELECTED',
                  END_UNSELECTED: 'END_UNSELECTED', 
                  END_SELECTED:'END_SELECTED', 
                  UNVISITED: 'UNVISITED',
-                VISITED: 'VISITED'}
+                VISITED: 'VISITED',
+                TO_BE_EXPLORED: 'TO_BE_EXPLORED'}
 
 window.onload = () => {
     document.onmousedown = mouseDown;
@@ -108,7 +109,9 @@ drawGrid = () => {
                 else if(curNodeType===NODETYPES.END_SELECTED) //end spot highlighted
                     ctx.fillStyle="rgb(255, 120, 131)"
                 else if(curNodeType===NODETYPES.VISITED)
-                    ctx.fillStyle="rgba(206, 252, 241, 0.5)"
+                    ctx.fillStyle="rgba(0, 153, 255, 0.7)"
+                else if(curNodeType===NODETYPES.TO_BE_EXPLORED)
+                    ctx.fillStyle="rgba(0, 255, 255, 0.6)"
                 ctx.fillRect(j*colWidth, i*rowHeight, colWidth, rowHeight)
                 ctx.strokeRect(j*colWidth, i*rowHeight, colWidth, rowHeight)
             } else { //grid line
@@ -384,6 +387,11 @@ getAllNeighbours = (map, node) => {
     return neighbours //means no adjacent unvisited nodes
 }
 
+showStartAndEnd = () => {
+    startNode.nodeType=NODETYPES.START_UNSELECTED;
+    endNode.nodeType=NODETYPES.END_UNSELECTED;
+}
+
 depthFirstSearch = (stack, map) => {
 
     if (stack.length===0)
@@ -484,14 +492,11 @@ djikstra = (djikPQ, map) => {
             node.g=tempG
         if (!pqContains(djikPQ, node)){
             djikPQ.queue(node)
+            node.nodeType=NODETYPES.TO_BE_EXPLORED
         }
     }
 
     return "SEARCHING"
-
-
-
-
 }
 
 function main(){
@@ -504,6 +509,7 @@ function main(){
             else if(status==="FOUND"){
                 runningSearch=false
                 path=dfsStack;
+                showStartAndEnd()
             }
             else if(status==="NOT FOUND"){
                 runningSearch=false
@@ -516,6 +522,7 @@ function main(){
                 runningSearch=true
             else if(status==="FOUND"){
                 runningSearch=false
+                showStartAndEnd()
             }
             else if(status==="NOT FOUND"){
                 runningSearch=false
@@ -527,6 +534,7 @@ function main(){
                 runningSearch=true
             else if(status==="FOUND"){
                 runningSearch=false
+                showStartAndEnd()
             }
             else if(status==="NOT FOUND"){
                 runningSearch=false
@@ -540,4 +548,4 @@ function main(){
     drawPath(path)
 }
 
-setInterval(main, 1000/500)
+setInterval(main, 1000/30)
