@@ -12,21 +12,43 @@ const rows = 500 / rowHeight
 let mouseClicked = false;
 let path = []
 
-let searchType = {DFS: false, BFS: false, DJIKSTRA: false};
+let searchType = {DFS: false, BFS: false, DJIKSTRA: false, ASTAR: false};
 let runningSearch = false
 
 let dfsStack = [];
 let bfsQueue = [];
 let djikPQ = new PriorityQueue({ comparator: function(nodeA, nodeB) { return nodeA.g - nodeB.g; }});
-
+let aStartPQ = new PriorityQueue({ comparator: function(nodeA, nodeB) { return nodeA.f - nodeB.f; }});
 
 const Node = function(row, col, nodeType) {
+
     this.row = row;
     this.col=col;
     this.g=99999999;
-    this.f=0;
+    this.h=99999999;
+    this.f=99999999;
     this.nodeType=nodeType;
     this.prevNode=undefined;
+}
+
+//the addition of half the col width and row height are to get into the middle of the grid spot
+getXandYFromRowAndCol = ({row, col}) => {
+    return {x: col*colWidth+colWidth/2, y: row*rowHeight+rowHeight/2}
+}
+
+//sets node A's euclidean heuristic using nodeB
+setNodeHeuristic = (nodeA, nodeB) => {
+    let nodeACords = getXandYFromRowAndCol({row: nodeA.row, col: nodeA.col});
+    let nodeBCords = getXandYFromRowAndCol({row: nodeB.row, col: nodeB.col})
+    nodeA.h=Math.hypot(nodeBCords.x-nodeACords.x, nodeBCords.y-nodeACords.y);
+}
+
+setAllNodeHeuristics = (map, endNode) => {
+    map.forEach(row=>{
+        row.forEach(node=>{
+            setNodeHeuristic(node, endNode)
+        })
+    })
 }
 
 /*
@@ -58,6 +80,13 @@ mouseUp = () => {
     mouseClicked = false;
 }
 
+let endNode = new Node(20, 30, NODETYPES.END_UNSELECTED)
+let endSelected=false;
+let startNode = new Node(0, 0, NODETYPES.START_UNSELECTED)
+startNode.f=startNode.h;
+startNode.g=0;
+let startSelected = false;
+
 generateArrayGrid = () => {
     let map = [];
     for (let i =0; i<rows; i++){
@@ -73,14 +102,9 @@ generateArrayGrid = () => {
 let map = generateArrayGrid();
 let mapCopy = generateArrayGrid();
 
-let startNode = new Node(0, 0, NODETYPES.START_UNSELECTED)
-startNode.g=0;
-let startSelected = false;
-let endNode = new Node(10, 10, NODETYPES.END_UNSELECTED)
-let endSelected=false;
-
 map[startNode.row][startNode.col] = startNode;
 map[endNode.row][endNode.col] = endNode;
+setAllNodeHeuristics(map, endNode);
 
 mapCopy=JSON.parse(JSON.stringify(map));
 mapCopy.forEach(row=>{
@@ -141,10 +165,6 @@ getColAndRowFromXAndY = (x, y) => {
     return {col: Math.ceil(x/colWidth)-1, row: Math.ceil(y/rowHeight)-1}
 }
 
-//the addition of half the col width and row height are to get into the middle of the grid spot
-getXandYFromRowAndCol = ({row, col}) => {
-    return {x: col*colWidth+colWidth/2, y: row*rowHeight+rowHeight/2}
-}
 
 document.addEventListener('mousemove', (event)=>setPosClicked(event, "dragged"))
 
@@ -184,10 +204,12 @@ setPosClicked = (event, action) => {
         || row!=startNode.row) && (col!=endNode.col || row!=endNode.row)){
 
         let newUnvisitedNode = new Node(startNode.row, startNode.col, NODETYPES.UNVISITED)
+        setNodeHeuristic(newUnvisitedNode, endNode)
 
         startNode.row=row;
         startNode.col=col;
         startNode.nodeType=NODETYPES.START_UNSELECTED
+        setNodeHeuristic(startNode, endNode);
 
         startSelected=false;
         map[newUnvisitedNode.row][newUnvisitedNode.col] = newUnvisitedNode;
@@ -214,6 +236,7 @@ setPosClicked = (event, action) => {
         || row!=startNode.row) && (col!=endNode.col || row!=endNode.row)){
 
         let newUnvisitedNode = new Node(endNode.row, endNode.col, NODETYPES.UNVISITED)
+        setNodeHeuristic(newUnvisitedNode, endNode)
 
         endNode.row=row;
         endNode.col=col;
@@ -225,6 +248,9 @@ setPosClicked = (event, action) => {
 
         map[endNode.row][endNode.col] = endNode;
         mapCopy[endNode.row][endNode.col] = endNode;
+
+        setAllNodeHeuristics(map, endNode);
+        setAllNodeHeuristics(mapCopy, endNode);
 
         return
     }
@@ -261,6 +287,8 @@ setSearchType= (searchAlgo) => {
         searchType.BFS=true
     else if (searchAlgo === "DJIKSTRA")
         searchType.DJIKSTRA=true
+    else if(searchAlgo==="A*")
+        searchType.ASTAR=true
 
     document.querySelector("#algoDropdown button").textContent=searchAlgo;
 }
@@ -274,6 +302,9 @@ runSearch= () => {
         runningSearch=true
     } else if (searchType.DJIKSTRA){
         runDjikstra();
+        runningSearch=true;
+    } else if (searchType.ASTAR){
+        runAStar();
         runningSearch=true;
     }
 }
@@ -322,6 +353,14 @@ runDjikstra = () => {
     djikPQ.queue(startNode);
     map[startNode.row][startNode.col].nodeType=NODETYPES.VISITED 
 
+}
+
+runAStar = ()=> {
+    resetMap();
+    aStartPQ.clear();
+
+    aStartPQ.queue(startNode);
+    map[startNode.row][startNode.col].nodeType=NODETYPES.VISITED
 }
 
 isSameSpot = (node1, node2) => {
@@ -499,6 +538,47 @@ djikstra = (djikPQ, map) => {
     return "SEARCHING"
 }
 
+astar = (aStarPQ, map) => {
+    
+    if (aStartPQ.length===0)
+        return "NOT FOUND"
+    
+    let bestUnexploredNode = aStarPQ.dequeue();
+    bestUnexploredNode.nodeType=NODETYPES.VISITED;
+
+    //getting all its unvisited neighbours (not cur part of closed set)
+    let neighbours = getAllNeighbours(map, bestUnexploredNode)
+
+    //updating all the neighbours weights (if better) and adding them to PQ (not included prev visited neighbours)
+    for(let i = 0; i<neighbours.length; i++){
+        let node = neighbours[i];
+        node.prevNode=bestUnexploredNode;
+
+        if (node===endNode){
+            path.unshift(endNode)
+            let previous = endNode.prevNode
+            path.unshift(previous)
+            while(previous.prevNode !== undefined){
+                previous = previous.prevNode
+                path.unshift(previous)
+            }
+            return "FOUND"
+        }
+
+        let tempGScore = bestUnexploredNode.g+1;
+        let tempF = tempGScore+node.h;
+        if (tempGScore<node.g)
+            node.g=tempGScore;
+            node.f=tempF
+        if (!pqContains(aStarPQ, node)){
+            aStarPQ.queue(node)
+            node.nodeType=NODETYPES.TO_BE_EXPLORED
+        }
+    }
+
+    return "SEARCHING"
+}
+
 function main(){
 
     if (runningSearch){
@@ -540,6 +620,18 @@ function main(){
                 runningSearch=false
                 alert("NOT FOUND")
             }
+        } else if (searchType.ASTAR) {
+            let status = astar(aStartPQ, map);
+            if (status === "SEARCHING")
+                runningSearch=true
+            else if(status==="FOUND"){
+                runningSearch=false
+                showStartAndEnd()
+            }
+            else if(status==="NOT FOUND"){
+                runningSearch=false
+                alert("NOT FOUND")
+            }
         }
     }
 
@@ -548,4 +640,4 @@ function main(){
     drawPath(path)
 }
 
-setInterval(main, 1000/30)
+setInterval(main, 1000/1000)
