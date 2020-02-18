@@ -5,12 +5,13 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build":"browserify script.js -o  bundle.js"
+    "build": "browserify script.js -o  bundle.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "browserify": "^16.5.0",
     "js-priority-queue": "^0.1.5"
   }
 }

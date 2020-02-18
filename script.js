@@ -11,11 +11,10 @@ const cols = 1000 / colWidth;
 const rows = 500 / rowHeight
 let mouseClicked = false;
 let path = []
-let pathMatrix = []
 var timeStamp = null;
 
 let searchType = {DFS: false, BFS: false, DJIKSTRA: false, ASTAR: false};
-let mazeType={FREE_HAND: false, DIVISION: false, RANDOM: false}
+let mazeType={FREE_HAND: false, DIVISION: false, RANDOM: false, BACKTRACK: false}
 let runningSearch = false;
 let runningMazeGeneration=false;
 let randomMazeIteration = 0
@@ -179,14 +178,6 @@ drawPath = (path) =>{
     ctx.stroke();
 }
 
-drawPathMatrix = (pathMatrix) => {
-    if (pathMatrix.length===0)
-        return
-    pathMatrix.forEach(path=>{
-        drawPath(path)
-    })
-}
-
 getColAndRowFromXAndY = (x, y) => {
     return {col: Math.ceil(x/colWidth)-1, row: Math.ceil(y/rowHeight)-1}
 }
@@ -209,7 +200,7 @@ setPosClicked = (event, action) => {
     let row = gridCoord.row;
     let selMapNode;
     let selCopyNode;
-    if (row>=0 && row<rows-1 && col>=0 && col<cols-1){
+    if (row>=0 && row<=rows-1 && col>=0 && col<=cols-1){
         selMapNode = map[row][col];
         selCopyNode = mapCopy[row][col];
     }
@@ -308,8 +299,8 @@ setMazeType = (type)=> {
 
     if (type==="FREE_HAND"){
         mazeType.FREE_HAND=true;
-    } else if (type==="DIVISION"){
-        mazeType.DIVISION=true;
+    } else if (type==="BACKTRACK"){
+        mazeType.BACKTRACK=true;
         resetMap();
         map.forEach(row=>{
             row.forEach(node=>{
@@ -336,6 +327,13 @@ setMazeType = (type)=> {
         runningMazeGeneration=true;
         resetMap();
         mazeType.RANDOM=true;
+    } else if (type==="DIVISION"){
+        runningMazeGeneration=true;
+        resetMap();
+        mazeType.DIVISION=true;
+        startNode.nodeType=NODETYPES.UNVISITED;
+        endNode.nodeType=NODETYPES.UNVISITED;
+        recursiveDivision(map, 0, cols, 0, rows);
     }
 
     document.querySelector("#mazeGeneratorDropdown button").textContent=type;
@@ -779,7 +777,7 @@ getRandomNeighbourRecursiveBacktrack = (map, node) => {
         return null
 }
 
-recursiveDivision = (stack, map) => {
+recursiveBacktracking = (stack, map) => {
     if (stack.length===0){
         mapCopy=JSON.parse(JSON.stringify(map));
         mapCopy.forEach(row=>{
@@ -798,6 +796,12 @@ recursiveDivision = (stack, map) => {
         stack.pop();
     }
     
+}
+
+recursiveDivision = (map, startCol, endCol, startRow, endRow) => {
+    let width = endCol-startCol;
+    let height = endRow-startRow;
+    //if (width+1===1 && height+1===1)
 }
 
 randomMaze=(map)=>{
@@ -877,8 +881,8 @@ function main(){
     }
 
     if (runningMazeGeneration && !runningSearch){
-        if (mazeType.DIVISION){
-            let status = recursiveDivision(dfsStack, map);
+        if (mazeType.BACKTRACK){
+            let status = recursiveBacktracking(dfsStack, map);
             if (status==="DONE")
                 runningMazeGeneration=false;
         } else if (mazeType.RANDOM){
@@ -891,7 +895,6 @@ function main(){
     ctx.clearRect(0, 0, width, height);
     drawGrid()
     drawPath(path)
-    drawPathMatrix(pathMatrix)
 }
 
 setInterval(main, 1000/1000)
