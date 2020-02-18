@@ -23,7 +23,18 @@
                         </div>
                       </div>
                 </div>
-                <div class="col"></div>
+                <div class="col">
+                    <div id="mazeGeneratorDropdown"  class="dropdown">
+                        <button style="width: 100%" class="btn btn-secondary dropdown-toggle" type="button" id="dropdownMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                          Maze Generation
+                        </button>
+                        <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
+                          <a class="dropdown-item" href="#" onclick="setMazeType('FREE_HAND')">FREE HAND</a>
+                          <a class="dropdown-item" href="#" onclick="setMazeType('DIVISION')">DIVISION</a>
+                          <a class="dropdown-item" href="#" onclick="setMazeType('RANDOM')">RANDOM</a>
+                        </div>
+                      </div>
+                </div>
                 <div class="col">
                     <button onclick="runSearch()">START</button>
                     <button onclick="resetMap()">RESET</button>

@@ -402,9 +402,14 @@ const cols = 1000 / colWidth;
 const rows = 500 / rowHeight
 let mouseClicked = false;
 let path = []
+let pathMatrix = []
+var timeStamp = null;
 
 let searchType = {DFS: false, BFS: false, DJIKSTRA: false, ASTAR: false};
-let runningSearch = false
+let mazeType={FREE_HAND: false, DIVISION: false, RANDOM: false}
+let runningSearch = false;
+let runningMazeGeneration=false;
+let randomMazeIteration = 0
 
 let dfsStack = [];
 let bfsQueue = [];
@@ -432,6 +437,9 @@ setNodeHeuristic = (nodeA, nodeB) => {
     let nodeACords = getXandYFromRowAndCol({row: nodeA.row, col: nodeA.col});
     let nodeBCords = getXandYFromRowAndCol({row: nodeB.row, col: nodeB.col})
     nodeA.h=Math.hypot(nodeBCords.x-nodeACords.x, nodeBCords.y-nodeACords.y);
+    //let dx = Math.abs(nodeACords.x-nodeBCords.x)
+    //let dy = Math.abs(nodeACords.y-nodeBCords.y);
+    //nodeA.h=1*(dx+dy);
 }
 
 setAllNodeHeuristics = (map, endNode) => {
@@ -456,7 +464,8 @@ let NODETYPES = {START_UNSELECTED: 'START_UNSELECTED',
                  END_SELECTED:'END_SELECTED', 
                  UNVISITED: 'UNVISITED',
                 VISITED: 'VISITED',
-                TO_BE_EXPLORED: 'TO_BE_EXPLORED'}
+                TO_BE_EXPLORED: 'TO_BE_EXPLORED',
+                DOT: "DOT"}
 
 window.onload = () => {
     document.onmousedown = mouseDown;
@@ -471,7 +480,7 @@ mouseUp = () => {
     mouseClicked = false;
 }
 
-let endNode = new Node(20, 30, NODETYPES.END_UNSELECTED)
+let endNode = new Node(1, 1, NODETYPES.END_UNSELECTED)
 let endSelected=false;
 let startNode = new Node(0, 0, NODETYPES.START_UNSELECTED)
 startNode.f=startNode.h;
@@ -512,7 +521,7 @@ drawGrid = () => {
     for (let i =0; i<rows; i++){
         for (let j =0; j<cols; j++){
             let curNodeType = map[i][j].nodeType;
-            if(curNodeType!==NODETYPES.UNVISITED) {
+            if(curNodeType!==NODETYPES.UNVISITED && curNodeType!==NODETYPES.DOT) {
                 if (curNodeType===NODETYPES.WALL) //normal wall
                     ctx.fillStyle="rgb(0,0,0)"
                 else if(curNodeType===NODETYPES.START_UNSELECTED) //start spot normal
@@ -529,8 +538,17 @@ drawGrid = () => {
                     ctx.fillStyle="rgba(0, 255, 255, 0.6)"
                 ctx.fillRect(j*colWidth, i*rowHeight, colWidth, rowHeight)
                 ctx.strokeRect(j*colWidth, i*rowHeight, colWidth, rowHeight)
-            } else { //grid line
+            } else if (curNodeType===NODETYPES.UNVISITED) { //grid line
                 ctx.strokeRect(j*colWidth, i*rowHeight, colWidth, rowHeight)
+            } else {
+                ctx.strokeRect(j*colWidth, i*rowHeight, colWidth, rowHeight)
+                let {x, y} = getXandYFromRowAndCol({row: i, col: j})
+                ctx.beginPath();
+                ctx.arc(j*colWidth, i*rowHeight, 2, 0, 2*Math.PI, false);
+                ctx.fillStyle="green";
+                ctx.fill();
+
+                
             }
         }
     }
@@ -552,6 +570,14 @@ drawPath = (path) =>{
     ctx.stroke();
 }
 
+drawPathMatrix = (pathMatrix) => {
+    if (pathMatrix.length===0)
+        return
+    pathMatrix.forEach(path=>{
+        drawPath(path)
+    })
+}
+
 getColAndRowFromXAndY = (x, y) => {
     return {col: Math.ceil(x/colWidth)-1, row: Math.ceil(y/rowHeight)-1}
 }
@@ -563,7 +589,7 @@ document.addEventListener("mousedown", (event)=>setPosClicked(event, "clicked"))
 
 setPosClicked = (event, action) => {
 
-    if (runningSearch)
+    if (runningSearch || runningMazeGeneration)
         return
 
     let rect = canvas.getBoundingClientRect();
@@ -665,6 +691,48 @@ setPosClicked = (event, action) => {
     }
 }
 
+setMazeType = (type)=> {
+    //resetting ooptions
+    Object.keys(mazeType).forEach(key=>{
+        mazeType[key]=false;
+    })
+
+    if (type==="FREE_HAND"){
+        mazeType.FREE_HAND=true;
+    } else if (type==="DIVISION"){
+        mazeType.DIVISION=true;
+        resetMap();
+        map.forEach(row=>{
+            row.forEach(node=>{
+                if (node!==startNode && node!== endNode)
+                    node.nodeType=NODETYPES.WALL;
+            })
+        })
+
+        dfsStack = [];
+
+        let randCol = (Math.round(Math.random() * cols))
+        let randRow = (Math.round(Math.random() * rows))
+        while( map[randRow][randCol]===endNode
+            || map[randRow][randCol]===startNode){
+            randCol = (Math.round(Math.random() * cols))
+            randRow = (Math.round(Math.random() * rows))
+        }
+        dfsStack.push(map[randRow][randCol])
+        map[randRow][randCol].nodeType=NODETYPES.UNVISITED;
+        runningMazeGeneration=true;
+
+    } else if (type==="RANDOM"){
+        randomMazeIteration = 0;
+        runningMazeGeneration=true;
+        resetMap();
+        mazeType.RANDOM=true;
+    }
+
+    document.querySelector("#mazeGeneratorDropdown button").textContent=type;
+
+}
+
 setSearchType= (searchAlgo) => {
     
     //resetting ooptions
@@ -747,6 +815,7 @@ runDjikstra = () => {
 }
 
 runAStar = ()=> {
+    timeStamp=window.performance.now();
     resetMap();
     aStartPQ.clear();
 
@@ -758,63 +827,94 @@ isSameSpot = (node1, node2) => {
     return node1.col===node2.col && node1.row===node2.row
 }
 
-getFreeAdjacentNode = (map, node) => {
-    //check top
+checkTop = (map, node) => {
     if (node.row>0){
         if (map[node.row-1][node.col].nodeType===NODETYPES.UNVISITED ||
             map[node.row-1][node.col].nodeType===NODETYPES.END_UNSELECTED)
             return map[node.row-1][node.col]
     }
-    //check right
+    return null
+}
+
+checkRight = (map, node) => {
     if (node.col<cols-1){ //-1 because cols acc start at 0
         if (map[node.row][node.col+1].nodeType===NODETYPES.UNVISITED ||
             map[node.row][node.col+1].nodeType===NODETYPES.END_UNSELECTED)
             return map[node.row][node.col+1]
     }
-    //check bottom
+    return null
+}
+
+checkBottom = (map, node) => {
     if (node.row<rows-1){ //-1 because rows acc start at 0
         if (map[node.row+1][node.col].nodeType===NODETYPES.UNVISITED ||
             map[node.row+1][node.col].nodeType===NODETYPES.END_UNSELECTED)
             return map[node.row+1][node.col]
     }
-    //check left
+    return null
+}
+
+checkLeft = (map, node) => {
     if (node.col>0){ 
         if (map[node.row][node.col-1].nodeType===NODETYPES.UNVISITED ||
             map[node.row][node.col-1].nodeType===NODETYPES.END_UNSELECTED)
             return map[node.row][node.col-1]
     }
+    return null
+}
+
+getFreeAdjacentNode = (map, node) => {
+    if (checkTop(map, node) !== null ) return checkTop(map, node)
+    if (checkRight(map, node) !== null ) return checkRight(map, node)
+    if (checkBottom(map, node) !== null ) return checkBottom(map, node)
+    if (checkLeft(map, node) !== null ) return checkLeft(map, node)
 
     return null //means no adjacent unvisited nodes
 }
 
 getAllNeighbours = (map, node) => {
     let neighbours = []
-    //check top
-    if (node.row>0){
-        if (map[node.row-1][node.col].nodeType===NODETYPES.UNVISITED ||
-            map[node.row-1][node.col].nodeType===NODETYPES.END_UNSELECTED)
-            neighbours.push(map[node.row-1][node.col])
-    }
-    //check right
-    if (node.col<cols-1){ //-1 because cols acc start at 0
-        if (map[node.row][node.col+1].nodeType===NODETYPES.UNVISITED ||
-            map[node.row][node.col+1].nodeType===NODETYPES.END_UNSELECTED)
-            neighbours.push(map[node.row][node.col+1])
-    }
-    //check bottom
-    if (node.row<rows-1){ //-1 because rows acc start at 0
-        if (map[node.row+1][node.col].nodeType===NODETYPES.UNVISITED ||
-            map[node.row+1][node.col].nodeType===NODETYPES.END_UNSELECTED)
-            neighbours.push(map[node.row+1][node.col])
-    }
-    //check left
-    if (node.col>0){ 
-        if (map[node.row][node.col-1].nodeType===NODETYPES.UNVISITED ||
-            map[node.row][node.col-1].nodeType===NODETYPES.END_UNSELECTED)
-            neighbours.push(map[node.row][node.col-1])
-    }
+    if (checkTop(map, node) !== null )  neighbours.push(checkTop(map, node))
+    if (checkRight(map, node) !== null ) neighbours.push(checkRight(map, node))
+    if (checkBottom(map, node) !== null ) neighbours.push(checkBottom(map, node))
+    if (checkLeft(map, node) !== null ) neighbours.push(checkLeft(map, node))
 
     return neighbours //means no adjacent unvisited nodes
+}
+
+getRandomNeighbour = (map, node) => {
+    let directionsChecked = []
+    while(!(directionsChecked.includes(1) && 
+    directionsChecked.includes(2) &&
+    directionsChecked.includes(3) &&
+    directionsChecked.includes(4))){
+        let randDir = (Math.round(Math.random() * 4))+1
+        if (randDir === 1 && !directionsChecked.includes(1)){
+            if (checkTop(map, node) !== null)
+                return checkTop(map, node)
+            else    
+                directionsChecked.push(1)
+        }
+        if (randDir === 2 && !directionsChecked.includes(2)){
+            if (checkRight(map, node) !== null)
+                return checkRight(map, node)
+            else    
+                directionsChecked.push(2)
+        }
+        if (randDir === 3 && !directionsChecked.includes(3)){
+            if (checkBottom(map, node) !== null)
+                return checkBottom(map, node)
+            else    
+                directionsChecked.push(3)
+        }
+        if (randDir === 4 && !directionsChecked.includes(4)){
+            if (checkLeft(map, node) !== null)
+                return checkLeft(map, node)
+            else    
+                directionsChecked.push(4)
+        }
+    }
+    return null
 }
 
 showStartAndEnd = () => {
@@ -970,9 +1070,148 @@ astar = (aStarPQ, map) => {
     return "SEARCHING"
 }
 
+notAdjacentToPath = (map, node, direction) => {
+    //top
+    if (node.row>0 && direction!=="bottom"){
+        if (map[node.row-1][node.col].nodeType===NODETYPES.UNVISITED)
+            return false
+    }
+    //topright
+    if (node.row>0 && node.col<cols-1 && direction!=="bottom" && direction!=="left"){
+        if (map[node.row-1][node.col+1].nodeType===NODETYPES.UNVISITED)
+            return false
+    }
+    //top left
+    if (node.col>0 && node.row>0 && direction!=="bottom" && direction!=="right"){ 
+        if (map[node.row-1][node.col-1].nodeType===NODETYPES.UNVISITED)
+            return false
+    }
+    //right
+    if (node.col<cols-1 && direction!=="left"){ //-1 because cols acc start at 0
+        if (map[node.row][node.col+1].nodeType===NODETYPES.UNVISITED)
+            return false
+    }
+    //bottom
+    if (node.row<rows-1 && direction!=="top"){ //-1 because rows acc start at 0
+        if (map[node.row+1][node.col].nodeType===NODETYPES.UNVISITED)
+            return false
+    }
+    //bottomright
+    if (node.row<rows-1 && node.col<cols-1 && direction!=="left" && direction!=="top"){ //-1 because rows acc start at 0
+        if (map[node.row+1][node.col+1].nodeType===NODETYPES.UNVISITED)
+            return false
+    }
+
+    //left
+    if (node.col>0 && direction!=="right"){ 
+        if (map[node.row][node.col-1].nodeType===NODETYPES.UNVISITED)
+            return false
+    }
+    //bottom left
+    if (node.col>0 && node.row<rows-1 && direction!=="right" && direction!=="top"){ 
+        if (map[node.row+1][node.col-1].nodeType===NODETYPES.UNVISITED)
+            return false
+    }
+
+    return true;
+}
+
+getRandomNeighbourRecursiveBacktrack = (map, node) => {
+
+    let directionsChecked = []
+    
+    while (!(directionsChecked.includes(1) && directionsChecked.includes(2)
+            && directionsChecked.includes(3) && directionsChecked.includes(4))){
+
+                let randDir = (Math.ceil(Math.random() * 4))
+
+                 //top
+                if (randDir===1){
+                    if (node.row>0 && !directionsChecked.includes(1)) {
+                        if (map[node.row-1][node.col].nodeType===NODETYPES.WALL && notAdjacentToPath(map, map[node.row-1][node.col], "top") )
+                            return map[node.row-1][node.col]
+                        else    
+                            directionsChecked.push(1)
+                    }else   
+                        directionsChecked.push(1)
+                }
+                //right
+                if (randDir===2){ //-1 because cols acc start at 0
+                    if (node.col<cols-1 && !directionsChecked.includes(2)) {
+                        if (map[node.row][node.col+1].nodeType===NODETYPES.WALL && notAdjacentToPath(map, map[node.row][node.col+1], "right"))
+                            return map[node.row][node.col+1]
+                        else    
+                            directionsChecked.push(2)
+                    } else  
+                        directionsChecked.push(2)
+                }
+                //bottom
+                if (randDir===3){ //-1 because rows acc start at 0
+                    if (node.row<rows-1 && !directionsChecked.includes(3)){
+                        if (map[node.row+1][node.col].nodeType===NODETYPES.WALL && notAdjacentToPath(map, map[node.row+1][node.col],"bottom"))
+                            return map[node.row+1][node.col]
+                        else    
+                            directionsChecked.push(3)
+                    } else  
+                        directionsChecked.push(3)
+                }
+
+                //left
+                if (randDir===4){ 
+                    if (node.col>0 && !directionsChecked.includes(4)){
+                        if (map[node.row][node.col-1].nodeType===NODETYPES.WALL && notAdjacentToPath(map, map[node.row][node.col-1], "left"))
+                            return map[node.row][node.col-1]
+                        else    
+                            directionsChecked.push(4)
+                    } else 
+                        directionsChecked.push(4)
+                }
+            }
+        return null
+}
+
+recursiveDivision = (stack, map) => {
+    if (stack.length===0){
+        mapCopy=JSON.parse(JSON.stringify(map));
+        mapCopy.forEach(row=>{
+            row.forEach(node=>{
+                Object.setPrototypeOf(node, Node.prototype)
+            })
+        })
+        return "DONE"
+    }
+    let curNode = stack[stack.length-1]
+    let neighbour = getRandomNeighbourRecursiveBacktrack(map, curNode);
+    if (neighbour!==null){
+            neighbour.nodeType=NODETYPES.UNVISITED;
+            stack.push(neighbour)
+    } else {
+        stack.pop();
+    }
+    
+}
+
+randomMaze=(map)=>{
+    let maxIteration = Math.floor(cols*rows/(100/30)); //50% of board
+    if(randomMazeIteration===maxIteration)
+        return "DONE"
+    let randCol = (Math.round(Math.random() * cols))
+    let randRow = (Math.round(Math.random() * rows))
+    while(map[randRow][randCol].nodeType===NODETYPES.WALL 
+        || map[randRow][randCol]===endNode
+        || map[randRow][randCol]===startNode){
+        randCol = (Math.round(Math.random() * cols))
+        randRow = (Math.round(Math.random() * rows))
+    }
+
+    map[randRow][randCol].nodeType=NODETYPES.WALL;
+    mapCopy[randRow][randCol].nodeType=NODETYPES.WALL;
+    randomMazeIteration++;
+}
+
 function main(){
 
-    if (runningSearch){
+    if (runningSearch && !runningMazeGeneration){
         if (searchType.DFS){
             let status = depthFirstSearch(dfsStack, map)
             if (status === "SEARCHING")
@@ -1016,6 +1255,8 @@ function main(){
             if (status === "SEARCHING")
                 runningSearch=true
             else if(status==="FOUND"){
+                timeStamp=(window.performance.now()-timeStamp)/1000000
+                console.log("Time of Algo: " + timeStamp)
                 runningSearch=false
                 showStartAndEnd()
             }
@@ -1026,9 +1267,22 @@ function main(){
         }
     }
 
+    if (runningMazeGeneration && !runningSearch){
+        if (mazeType.DIVISION){
+            let status = recursiveDivision(dfsStack, map);
+            if (status==="DONE")
+                runningMazeGeneration=false;
+        } else if (mazeType.RANDOM){
+            let status = randomMaze(map);
+            if (status==="DONE")
+                runningMazeGeneration=false;
+        }
+    }
+
     ctx.clearRect(0, 0, width, height);
     drawGrid()
     drawPath(path)
+    drawPathMatrix(pathMatrix)
 }
 
 setInterval(main, 1000/1000)
