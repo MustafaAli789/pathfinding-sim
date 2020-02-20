@@ -4,11 +4,11 @@ var PriorityQueue = require('js-priority-queue');
 
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
-const width = 1000
+const width = 1020
 const height = 500
 const colWidth = rowHeight = 20
-const cols = 1000 / colWidth;
-const rows = 500 / rowHeight
+const cols = width / colWidth;
+const rows = height / rowHeight
 let mouseClicked = false;
 let path = []
 var timeStamp = null;
@@ -23,6 +23,8 @@ let dfsStack = [];
 let bfsQueue = [];
 let djikPQ = new PriorityQueue({ comparator: function(nodeA, nodeB) { return nodeA.g - nodeB.g; }});
 let aStartPQ = new PriorityQueue({ comparator: function(nodeA, nodeB) { return nodeA.f - nodeB.f; }});
+
+let numTimesStartAndEndPlaced = 0; //var needed to place end and start blocks after recursive division algo runs and ensure it places it once only
 
 const Node = function(row, col, nodeType) {
 
@@ -182,6 +184,29 @@ getColAndRowFromXAndY = (x, y) => {
     return {col: Math.ceil(x/colWidth)-1, row: Math.ceil(y/rowHeight)-1}
 }
 
+changeEndNode = (newRow, newCol) => {
+    endNode.row=newRow;
+    endNode.col=newCol;
+    endNode.nodeType=NODETYPES.END_UNSELECTED
+
+    map[endNode.row][endNode.col] = endNode;
+    mapCopy[endNode.row][endNode.col] = endNode;
+
+    setAllNodeHeuristics(map, endNode);
+    setAllNodeHeuristics(mapCopy, endNode);
+}
+
+changeStartNode = (newRow, newCol) => {
+    startNode.row=newRow;
+    startNode.col=newCol;
+    startNode.nodeType=NODETYPES.START_UNSELECTED
+
+    map[startNode.row][startNode.col] = startNode;
+    mapCopy[startNode.row][startNode.col] = startNode;
+
+    setNodeHeuristic(startNode, endNode);
+
+}
 
 document.addEventListener('mousemove', (event)=>setPosClicked(event, "dragged"))
 
@@ -223,17 +248,11 @@ setPosClicked = (event, action) => {
         let newUnvisitedNode = new Node(startNode.row, startNode.col, NODETYPES.UNVISITED)
         setNodeHeuristic(newUnvisitedNode, endNode)
 
-        startNode.row=row;
-        startNode.col=col;
-        startNode.nodeType=NODETYPES.START_UNSELECTED
-        setNodeHeuristic(startNode, endNode);
-
         startSelected=false;
         map[newUnvisitedNode.row][newUnvisitedNode.col] = newUnvisitedNode;
         mapCopy[newUnvisitedNode.row][newUnvisitedNode.col] = newUnvisitedNode;
 
-        map[startNode.row][startNode.col] = startNode;
-        mapCopy[startNode.row][startNode.col] = startNode;
+        changeStartNode(row, col);
 
         return
     }
@@ -255,19 +274,11 @@ setPosClicked = (event, action) => {
         let newUnvisitedNode = new Node(endNode.row, endNode.col, NODETYPES.UNVISITED)
         setNodeHeuristic(newUnvisitedNode, endNode)
 
-        endNode.row=row;
-        endNode.col=col;
-        endNode.nodeType=NODETYPES.END_UNSELECTED
-
         endSelected=false;
         map[newUnvisitedNode.row][newUnvisitedNode.col] = newUnvisitedNode;
         mapCopy[newUnvisitedNode.row][newUnvisitedNode.col] = newUnvisitedNode;
 
-        map[endNode.row][endNode.col] = endNode;
-        mapCopy[endNode.row][endNode.col] = endNode;
-
-        setAllNodeHeuristics(map, endNode);
-        setAllNodeHeuristics(mapCopy, endNode);
+        changeEndNode(row, col);
 
         return
     }
@@ -322,6 +333,14 @@ setMazeType = (type)=> {
         map[randRow][randCol].nodeType=NODETYPES.UNVISITED;
         runningMazeGeneration=true;
 
+        map[startNode.row][startNode.col]=new Node(startNode.row, startNode.col, NODETYPES.WALL)
+        map[endNode.row][endNode.col]=new Node(endNode.row, endNode.col, NODETYPES.WALL)
+        mapCopy[startNode.row][startNode.col]=new Node(startNode.row, startNode.col, NODETYPES.WALL)
+        mapCopy[endNode.row][endNode.col]=new Node(endNode.row, endNode.col, NODETYPES.WALL)
+
+        numTimesStartAndEndPlaced=0;
+
+
     } else if (type==="RANDOM"){
         randomMazeIteration = 0;
         runningMazeGeneration=true;
@@ -329,11 +348,17 @@ setMazeType = (type)=> {
         mazeType.RANDOM=true;
     } else if (type==="DIVISION"){
         runningMazeGeneration=true;
-        resetMap();
+        clearMap();
         mazeType.DIVISION=true;
-        startNode.nodeType=NODETYPES.UNVISITED;
-        endNode.nodeType=NODETYPES.UNVISITED;
-        recursiveDivision(map, 0, cols, 0, rows);
+
+        map[startNode.row][startNode.col]=new Node(startNode.row, startNode.col, NODETYPES.UNVISITED)
+        map[endNode.row][endNode.col]=new Node(endNode.row, endNode.col, NODETYPES.UNVISITED)
+        mapCopy[startNode.row][startNode.col]=new Node(startNode.row, startNode.col, NODETYPES.UNVISITED)
+        mapCopy[endNode.row][endNode.col]=new Node(endNode.row, endNode.col, NODETYPES.UNVISITED)
+
+        numTimesStartAndEndPlaced = 0;
+
+        recursiveDivision(map, 0, cols-1, 0, rows-1);
     }
 
     document.querySelector("#mazeGeneratorDropdown button").textContent=type;
@@ -375,6 +400,16 @@ runSearch= () => {
     }
 }
 
+clearMap = () => {
+    map.forEach(row=>{
+        row.forEach(node=>{
+            if (node!==startNode && node!==endNode)
+                node.nodeType=NODETYPES.UNVISITED
+        })
+    })
+}
+
+//takes away the blue visited nodes
 resetMap = () => {
 
     //clean upp
@@ -777,6 +812,39 @@ getRandomNeighbourRecursiveBacktrack = (map, node) => {
         return null
 }
 
+placeStartAndEnd = () => {
+
+    if (numTimesStartAndEndPlaced > 0)
+        return
+    
+    numTimesStartAndEndPlaced++;
+
+    mapCopy=JSON.parse(JSON.stringify(map));
+    mapCopy.forEach(row=>{
+        row.forEach(node=>{
+            Object.setPrototypeOf(node, Node.prototype)
+        })
+    })
+    
+
+    let randCol1 = (Math.round(Math.random() * cols))
+    let randRow1 = (Math.round(Math.random() * rows))
+    while( map[randRow1][randCol1].nodeType===NODETYPES.WALL){
+        randCol1 = (Math.round(Math.random() * cols))
+        randRow1 = (Math.round(Math.random() * rows))
+    }
+
+    let randCol2 = (Math.round(Math.random() * cols))
+    let randRow2 = (Math.round(Math.random() * rows))
+    while( map[randRow2][randCol2].nodeType===NODETYPES.WALL ||
+        map[randRow2][randCol2]===startNode){
+        randCol2 = (Math.round(Math.random() * cols))
+        randRow2 = (Math.round(Math.random() * rows))
+    }
+    changeStartNode(randRow1, randCol1);
+    changeEndNode(randRow2, randCol2);
+}
+
 recursiveBacktracking = (stack, map) => {
     if (stack.length===0){
         mapCopy=JSON.parse(JSON.stringify(map));
@@ -798,14 +866,116 @@ recursiveBacktracking = (stack, map) => {
     
 }
 
-recursiveDivision = (map, startCol, endCol, startRow, endRow) => {
-    let width = endCol-startCol;
-    let height = endRow-startRow;
-    //if (width+1===1 && height+1===1)
+noSquarePaths = () => {
+    let noSquarePaths = true
+    map.forEach((row, rowindex)=>{
+        row.forEach((node, col)=>{
+            if (node.nodeType===NODETYPES.UNVISITED){
+                let adjacentPieces=[]
+
+                if(col<cols-1){
+                    if(row[col+1].nodeType===NODETYPES.UNVISITED)
+                        adjacentPieces.push("right")
+                }
+                if(rowindex<rows-1){
+                    if(map[rowindex+1][col].nodeType===NODETYPES.UNVISITED)
+                        adjacentPieces.push("bottom")
+                }
+                if(col<cols-1 && rowindex<rows-1){
+                    if(map[rowindex+1][col+1].nodeType===NODETYPES.UNVISITED)
+                        adjacentPieces.push("bottomRight")
+                }
+                if (adjacentPieces.includes("bottom") && adjacentPieces.includes("right")
+                && adjacentPieces.includes("bottomRight")){
+                    noSquarePaths=false;
+                }
+            }
+        
+        })
+    })
+    return noSquarePaths 
+}
+
+function sleep (time) {
+    return new Promise((resolve) => setTimeout(resolve, time));
+  }
+
+async function recursiveDivision(map, startCol, endCol, startRow, endRow){
+
+    if (noSquarePaths()){
+        runningMazeGeneration=false;
+        mazeType.DIVISION=false;
+        placeStartAndEnd();
+    }
+
+    let w = endCol-startCol;
+    let h = endRow-startRow;
+    if (w+1===1 || h+1===1)
+        return
+    
+    if(w>=h){ //splitting map vertically
+        let randCol = Math.floor(Math.random() * (endCol-startCol+1)) + startCol
+        while(randCol%2!==1){ //must be even col to put wall (mod has to be 1 since indices start at 0)
+            randCol = Math.floor(Math.random() * (endCol-startCol+1)) + startCol
+        }
+
+        //setting wall to split current map in half vertically
+        map.forEach((row, rowIndex)=>{
+            row.forEach((node, col)=>{
+                if(col===randCol && rowIndex>=startRow && rowIndex<=endRow)
+                    node.nodeType=NODETYPES.WALL
+            })
+        })
+
+        let randPathRow = Math.floor(Math.random() * (endRow-startRow+1)) + startRow
+        while(randPathRow%2!==0){ //must be odd row to put path (mod has to be 0 since indices start at 0)
+            randPathRow = Math.floor(Math.random() * (endRow-startRow+1)) + startRow
+        }
+
+        //setting path to keep maze property
+        map[randPathRow][randCol].nodeType=NODETYPES.UNVISITED
+
+        ctx.clearRect(0, 0, width, height);
+        drawGrid()
+
+        await sleep(100)
+        recursiveDivision(map, startCol, randCol-1, startRow, endRow) //repeat on left
+        await sleep(100)
+        recursiveDivision(map, randCol+1, endCol, startRow, endRow)
+
+    } else { //splitting map horizontally
+        let randRow = Math.floor(Math.random() * (endRow-startRow+1)) + startRow
+        while(randRow%2!==1){ //must be even row to put wall (mod has to be 1 since indices start at 0)
+            randRow = Math.floor(Math.random() * (endRow-startRow+1)) + startRow
+        }
+
+        //setting wall to split current map in half
+        map[randRow].forEach((node,col)=>{
+            if(col>=startCol && col<=endCol){
+                node.nodeType=NODETYPES.WALL
+            }
+        })
+
+        let randPathCol = Math.floor(Math.random() * (endCol-startCol+1)) + startCol
+        while(randPathCol%2!==0){ //must be odd row to put path (mod has to be 0 since indices start at 0)
+            randPathCol = Math.floor(Math.random() * (endCol-startCol+1)) + startCol
+        }
+
+        //setting path to keep maze property
+        map[randRow][randPathCol].nodeType=NODETYPES.UNVISITED
+
+        ctx.clearRect(0, 0, width, height);
+        drawGrid()
+
+        await sleep(100)
+        recursiveDivision(map, startCol, endCol, startRow, randRow-1) //repeat on bottom
+        await(100)
+        recursiveDivision(map, startCol, endCol, randRow+1, endRow) //repeat on top
+    }
 }
 
 randomMaze=(map)=>{
-    let maxIteration = Math.floor(cols*rows/(100/30)); //50% of board
+    let maxIteration = Math.floor(cols*rows/(100/30)); //30% of board
     if(randomMazeIteration===maxIteration)
         return "DONE"
     let randCol = (Math.round(Math.random() * cols))
@@ -883,8 +1053,10 @@ function main(){
     if (runningMazeGeneration && !runningSearch){
         if (mazeType.BACKTRACK){
             let status = recursiveBacktracking(dfsStack, map);
-            if (status==="DONE")
+            if (status==="DONE"){
                 runningMazeGeneration=false;
+                placeStartAndEnd();
+            }
         } else if (mazeType.RANDOM){
             let status = randomMaze(map);
             if (status==="DONE")
